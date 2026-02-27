@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/VoxelEngine.dir/src/main.cpp.o CMakeFiles/VoxelEngine.dir/src/Window.cpp.o CMakeFiles/VoxelEngine.dir/src/Shader.cpp.o -o VoxelEngine  /home/luke/vcpkg/installed/x64-linux/debug/lib/libglfw3.a /home/luke/vcpkg/installed/x64-linux/debug/lib/libglad.a /home/luke/vcpkg/installed/x64-linux/debug/lib/libglm.a /usr/lib/x86_64-linux-gnu/librt.a -lm -ldl 

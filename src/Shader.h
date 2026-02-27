@@ -1,6 +1,6 @@
 #pragma once
 #include <string>
-#include <glad/gald.h>
+#include <glad/glad.h>
 #include <glm/glm.hpp>
 
 class Shader {

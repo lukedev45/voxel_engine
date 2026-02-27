@@ -4,10 +4,10 @@
 #include <iostream>
 #include <glm/gtc/type_ptr.hpp>
 
-static std::string readFile(const char*) {
+static std::string readFile(const char* path) {
     std::ifstream file(path);
     if (!file.is_open()){
-        std:cerr << "ERROR: Could not open shader file: " << path << '\n';
+        std::cerr << "ERROR: Could not open shader file: " << path << '\n';
         return "";
     }
     std::stringstream ss;
@@ -17,7 +17,7 @@ static std::string readFile(const char*) {
 
 static unsigned int compileShader(const char* src, GLenum type) {
     unsigned int shader = glCreateShader(type);
-    glShaderSOurce(shader, 1, &src, NULL);
+    glShaderSource(shader, 1, &src, NULL);
     glCompileShader(shader);
 
     int success;
@@ -25,7 +25,7 @@ static unsigned int compileShader(const char* src, GLenum type) {
     glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
     if (!success) {
         glGetShaderInfoLog(shader, 512, NULL, log);
-        std:cerr << "SHADER COMPILE ERROR ("
+        std::cerr << "SHADER COMPILE ERROR ("
                  << (type == GL_VERTEX_SHADER ? "VERTEX" : "FRAGMENT")
                  << "):\n" << log << '\n';
     }
@@ -36,8 +36,8 @@ Shader::Shader(const char* vertexPath, const char* fragmentPath){
     std::string vCode = readFile(vertexPath);
     std::string fCode = readFile(fragmentPath);
 
-    unsigned int vert = compilerShader(vCode.c_str(), GL_VERTEX_SHADER);
-    unsigned int frag = compilerShader(fCode.c_str(), GL_FRAGMENT_SHADER);
+    unsigned int vert = compileShader(vCode.c_str(), GL_VERTEX_SHADER);
+    unsigned int frag = compileShader(fCode.c_str(), GL_FRAGMENT_SHADER);
 
     ID = glCreateProgram();
     glAttachShader(ID, vert);
