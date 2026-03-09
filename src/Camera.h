@@ -2,7 +2,7 @@
 #include <glm/glm.hpp>
 
 class Camera {
-    public:
+public:
     glm::vec3 position;
     float yaw, pitch;
     float moveSpeed;
