@@ -3,6 +3,7 @@
 #include <glm/glm.hpp>
 #include "Chunk.h"
 #include "Shader.h"
+#include "FastNoiseLite.h"
 
 struct IVec3Hash {
     size_t operator()(const glm::ivec3& v) const {
@@ -16,16 +17,18 @@ struct IVec3Hash {
 };
 
 class World {
-    public:
-        World();
-        ~World();
+public:
+    FastNoiseLite noise;
 
-        void generate(int radius); // Gneerate chunks in a radius around origin
-        void render(Shader& shader, const glm::mat4& view, const glm::mat4& projection);
+    World();
+    ~World();
 
-        Chunk* getChunk(glm::ivec3 chunkPos);
-        uint8_t getVoxel(int worldX, int worldY, int worldZ);
+    void generate(int radius);
+    void render(Shader& shader, const glm::mat4& view, const glm::mat4& projection);
 
-    private:
-        std::unordered_map<glm::ivec3, Chunk*, IVec3Hash> chunks;
+    Chunk* getChunk(glm::ivec3 chunkPos);
+    uint8_t getVoxel(int worldX, int worldY, int worldZ);
+
+private:
+    std::unordered_map<glm::ivec3, Chunk*, IVec3Hash> chunks;
 };

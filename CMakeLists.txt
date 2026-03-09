@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 3.20)
 project(VoxelEngine)
 
 set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.make"
+
+set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
     CACHE STRING "")
 
 find_package(glfw3 CONFIG REQUIRED)
@@ -16,10 +17,12 @@ add_executable(VoxelEngine
     src/Camera.cpp
     src/Chunk.cpp
     src/World.cpp
-    )
+)
+
+target_include_directories(VoxelEngine PRIVATE src vendor)
 
 target_link_libraries(VoxelEngine PRIVATE
     glfw
     glad::glad
     glm::glm
-    )
+)
