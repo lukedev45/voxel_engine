@@ -5,7 +5,7 @@
 #include "Window.h"
 #include "Shader.h"
 #include "Camera.h"
-#include "Chunk.h"  // NEW
+#include "Chunk.h" 
 
 Camera camera(glm::vec3(8.0f, 20.0f, 8.0f)); // Start above the chunk
 float lastX = 640.0f, lastY = 360.0f;

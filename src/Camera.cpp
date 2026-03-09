@@ -4,7 +4,7 @@
 
 Camera::Camera(glm::vec3 startPos)
     : position(startPos), yaw(-90.0f), pitch(0.0f),
-      moveSpeed(5.0f), sensitivity(0.1f)
+      moveSpeed(5.0f), sensitivity(0.01f)
 {}
 
 glm::vec3 Camera::getForward() const {
