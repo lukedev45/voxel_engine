@@ -14,6 +14,7 @@ add_executable(VoxelEngine
     src/Window.cpp
     src/Shader.cpp
     src/Camera.cpp
+    src/Chunk.cpp
     )
 
 target_link_libraries(VoxelEngine PRIVATE

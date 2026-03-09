@@ -5,9 +5,9 @@
 #include "Window.h"
 #include "Shader.h"
 #include "Camera.h"
+#include "Chunk.h"  // NEW
 
-// Global camera and mouse state
-Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
+Camera camera(glm::vec3(8.0f, 20.0f, 8.0f)); // Start above the chunk
 float lastX = 640.0f, lastY = 360.0f;
 bool firstMouse = true;
 
@@ -18,7 +18,7 @@ void mouseCallback(GLFWwindow* window, double xpos, double ypos) {
         firstMouse = false;
     }
     float xOffset =  (xpos - lastX);
-    float yOffset = -(ypos - lastY); // Inverted — screen y goes down, world y goes up
+    float yOffset = -(ypos - lastY);
     lastX = xpos;
     lastY = ypos;
     camera.processMouse(xOffset, yOffset);
@@ -27,76 +27,22 @@ void mouseCallback(GLFWwindow* window, double xpos, double ypos) {
 int main() {
     Window window(1920, 1080, "Voxel Engine");
 
-    // Hide and capture the mouse cursor
     glfwSetInputMode(window.handle, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glfwSetCursorPosCallback(window.handle, mouseCallback);
 
-    // Cube vertices — 6 faces, 2 triangles each, 3 vertices each = 36 vertices
-    float vertices[] = {
-        // Back face
-        -0.5f, -0.5f, -0.5f,
-         0.5f, -0.5f, -0.5f,
-         0.5f,  0.5f, -0.5f,
-         0.5f,  0.5f, -0.5f,
-        -0.5f,  0.5f, -0.5f,
-        -0.5f, -0.5f, -0.5f,
-        // Front face
-        -0.5f, -0.5f,  0.5f,
-         0.5f, -0.5f,  0.5f,
-         0.5f,  0.5f,  0.5f,
-         0.5f,  0.5f,  0.5f,
-        -0.5f,  0.5f,  0.5f,
-        -0.5f, -0.5f,  0.5f,
-        // Left face
-        -0.5f,  0.5f,  0.5f,
-        -0.5f,  0.5f, -0.5f,
-        -0.5f, -0.5f, -0.5f,
-        -0.5f, -0.5f, -0.5f,
-        -0.5f, -0.5f,  0.5f,
-        -0.5f,  0.5f,  0.5f,
-        // Right face
-         0.5f,  0.5f,  0.5f,
-         0.5f,  0.5f, -0.5f,
-         0.5f, -0.5f, -0.5f,
-         0.5f, -0.5f, -0.5f,
-         0.5f, -0.5f,  0.5f,
-         0.5f,  0.5f,  0.5f,
-        // Bottom face
-        -0.5f, -0.5f, -0.5f,
-         0.5f, -0.5f, -0.5f,
-         0.5f, -0.5f,  0.5f,
-         0.5f, -0.5f,  0.5f,
-        -0.5f, -0.5f,  0.5f,
-        -0.5f, -0.5f, -0.5f,
-        // Top face
-        -0.5f,  0.5f, -0.5f,
-         0.5f,  0.5f, -0.5f,
-         0.5f,  0.5f,  0.5f,
-         0.5f,  0.5f,  0.5f,
-        -0.5f,  0.5f,  0.5f,
-        -0.5f,  0.5f, -0.5f,
-    };
-
-    unsigned int VAO, VBO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glBindVertexArray(0);
+    // Create a chunk at origin and build its mesh
+    Chunk chunk(glm::ivec3(0, 0, 0));
+    chunk.buildMesh();
 
     Shader shader("assets/shaders/cube.vert", "assets/shaders/cube.frag");
 
-    // Enable back-face culling — don't render faces pointing away from the camera
     glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+    glFrontFace(GL_CCW);
 
     float lastFrame = 0.0f;
 
     while (!window.shouldClose()) {
-        // Delta time — keeps movement speed consistent regardless of framerate
         float currentFrame = glfwGetTime();
         float deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
@@ -117,27 +63,24 @@ int main() {
 
         shader.use();
 
-        // Build the 3 matrices and pass them to the shader
-        glm::mat4 model      = glm::mat4(1.0f); // Identity — cube sits at world origin
+        glm::mat4 model      = glm::mat4(1.0f);
         glm::mat4 view       = camera.getViewMatrix();
         glm::mat4 projection = glm::perspective(
-            glm::radians(70.0f),        // Field of view
-            window.getAspectRatio(),    // Aspect ratio
-            0.1f,                       // Near clip plane
-            500.0f                      // Far clip plane
+            glm::radians(70.0f),
+            window.getAspectRatio(),
+            0.1f,
+            500.0f
         );
 
         shader.setMat4("model",      model);
         shader.setMat4("view",       view);
         shader.setMat4("projection", projection);
 
-        glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, 36);
+        // Render the chunk
+        chunk.render();
 
         window.swapAndPoll();
     }
 
-    glDeleteVertexArrays(1, &VAO);
-    glDeleteBuffers(1, &VBO);
     return 0;
 }
