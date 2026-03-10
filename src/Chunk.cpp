@@ -81,13 +81,15 @@ void Chunk::setVoxel(int x, int y, int z, uint8_t type) {
     voxels[indexOf(x, y, z)] = type;
 }
 
-void Chunk::addFace(std::vector<float>& vertices, float x, float y, float z, int face) {
+void Chunk::addFace(std::vector<float>& vertices, float x, float y, float z, int face, uint8_t blockType) {
     static const int QUAD_INDICES[6] = {0, 1, 2, 2, 3, 0};
     for (int i = 0; i < 6; i++) {
         int vi = QUAD_INDICES[i] * 3;
         vertices.push_back(x + FACE_VERTICES[face][vi + 0]);
         vertices.push_back(y + FACE_VERTICES[face][vi + 1]);
         vertices.push_back(z + FACE_VERTICES[face][vi + 2]);
+        // Block type
+        vertices.push_back((float)blockType);
     }
 }
 
@@ -97,7 +99,8 @@ void Chunk::buildMesh(World* world) {
     for (int x = 0; x < CHUNK_SIZE; x++) {
         for (int y = 0; y < CHUNK_SIZE; y++) {
             for (int z = 0; z < CHUNK_SIZE; z++) {
-                if (getVoxel(x, y, z) == 0) continue;
+                uint8_t type = getVoxel(x, y, z);
+                if (type == 0) continue;
 
                 for (int face = 0; face < 6; face++) {
                     int nx = x + FACE_NORMALS[face][0];
@@ -105,7 +108,6 @@ void Chunk::buildMesh(World* world) {
                     int nz = z + FACE_NORMALS[face][2];
 
                     uint8_t neighbour = 0;
-
                     if (isInBounds(nx, ny, nz)) {
                         neighbour = getVoxel(nx, ny, nz);
                     } else if (world) {
@@ -116,7 +118,7 @@ void Chunk::buildMesh(World* world) {
                     }
 
                     if (neighbour == 0)
-                        addFace(vertices, (float)x, (float)y, (float)z, face);
+                        addFace(vertices, (float)x, (float)y, (float)z, face, type);
                 }
             }
         }
@@ -127,8 +129,13 @@ void Chunk::buildMesh(World* world) {
     glBindVertexArray(VAO);
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_DYNAMIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
+
+    glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
     glBindVertexArray(0);
 }
 
