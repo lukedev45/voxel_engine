@@ -1,4 +1,4 @@
-#include <glad/glad.h>
+#include <glad/gl.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -6,6 +6,7 @@
 #include "Shader.h"
 #include "Camera.h"
 #include "World.h"
+#include "TextureLoader.h"
 
 Camera camera(glm::vec3(0.0f, 20.0f, 0.0f));
 float lastX = 960.0f, lastY = 540.0f;
@@ -35,6 +36,13 @@ int main() {
     world.generate(2);
 
     Shader shader("assets/shaders/cube.vert", "assets/shaders/cube.frag");
+
+    unsigned int atlasTexture = TextureLoader::loadTexture("assets/textures/atlas.png");
+    shader.use();
+    shader.setInt("texAtlas", 0);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, atlasTexture);
 
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);

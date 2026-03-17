@@ -1,5 +1,6 @@
 #include "Chunk.h"
 #include "World.h"
+#include "BlockData.h"
 #include <cstring>
 
 static const int FACE_NORMALS[6][3] = {
@@ -81,16 +82,34 @@ void Chunk::setVoxel(int x, int y, int z, uint8_t type) {
     voxels[indexOf(x, y, z)] = type;
 }
 
-void Chunk::addFace(std::vector<float>& vertices, float x, float y, float z, int face, uint8_t blockType) {
+// UV corners for each quad vertex — V is flipped so tiles render right-side-up
+// without needing stbi_set_flip_vertically_on_load
+static const float FACE_UVS[4][2] = {
+    {0.0f, 1.0f},  // v0 -> bottom-left of tile (image bottom)
+    {1.0f, 1.0f},  // v1 -> bottom-right
+    {1.0f, 0.0f},  // v2 -> top-right (image top)
+    {0.0f, 0.0f},  // v3 -> top-left
+};
+
+void Chunk::addFace(std::vector<float>& vertices, float x, float y, float z, int face, int tileIndex) {
     static const int QUAD_INDICES[6] = {0, 1, 2, 2, 3, 0};
+
+    float tileU = (tileIndex % ATLAS_COLS) * TILE_UV;
+    float tileV = (tileIndex / ATLAS_COLS) * TILE_UV;
+
     for (int i = 0; i < 6; i++) {
-        int vi = QUAD_INDICES[i] * 3;
+        int corner = QUAD_INDICES[i];
+        int vi = corner * 3;
+
         // Position
         vertices.push_back(x + FACE_VERTICES[face][vi + 0]);
         vertices.push_back(y + FACE_VERTICES[face][vi + 1]);
         vertices.push_back(z + FACE_VERTICES[face][vi + 2]);
-        // Block type
-        vertices.push_back((float)blockType);
+
+        // UV
+        vertices.push_back(tileU + FACE_UVS[corner][0] * TILE_UV);
+        vertices.push_back(tileV + FACE_UVS[corner][1] * TILE_UV);
+
         // Face index
         vertices.push_back((float)face);
     }
@@ -116,24 +135,29 @@ void Chunk::buildMesh(World* world) {
                         int worldZ = position.z * CHUNK_SIZE + nz;
                         neighbour = world->getVoxel(worldX, worldY, worldZ);
                     }
-                    if (neighbour == 0)
-                        addFace(vertices, (float)x, (float)y, (float)z, face, type);
+                    if (neighbour == 0) {
+                        int tileIndex = getTileIndex(type, face);
+                        addFace(vertices, (float)x, (float)y, (float)z, face, tileIndex);
+                    }
                 }
             }
         }
     }
 
-    vertexCount = vertices.size() / 5;
+    vertexCount = vertices.size() / 6;
 
     glBindVertexArray(VAO);
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_DYNAMIC_DRAW);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+    // Position (location 0): vec3, stride 24, offset 0
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    // TexCoord (location 1): vec2, stride 24, offset 12
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(4 * sizeof(float)));
+    // Face (location 2): float, stride 24, offset 20
+    glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(5 * sizeof(float)));
     glEnableVertexAttribArray(2);
 
     glBindVertexArray(0);
