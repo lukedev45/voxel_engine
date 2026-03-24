@@ -1,39 +1,182 @@
 #include "World.h"
 #include <glm/gtc/matrix_transform.hpp>
+#include <algorithm>
+#include <cmath>
+
+static const glm::ivec3 NEIGHBOR_OFFSETS[4] = {
+    {1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}
+};
 
 World::World() {
-    // Set up the noise generator
     noise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
-    noise.SetFrequency(0.005f);   // Lower = broader hills
-    noise.SetSeed(1337);          // Change for different terrain
+    noise.SetFrequency(0.005f);
+    noise.SetSeed(1337);
 }
 
 World::~World() {
-    for (auto& [pos, chunk] : chunks)
-        delete chunk;
+    for (auto& [pos, entry] : chunks)
+        delete entry.chunk;
     chunks.clear();
 }
 
-void World::generate(int radius) {
-    // Create all chunks first
-    for (int x = -radius; x <= radius; x++) {
-        for (int z = -radius; z <= radius; z++) {
-            glm::ivec3 chunkPos(x, 0, z);
-            Chunk* chunk = new Chunk(chunkPos);
-            chunks[chunkPos] = chunk;
+glm::ivec3 World::worldToChunkPos(const glm::vec3& worldPos) const {
+    return glm::ivec3(
+        (int)floor(worldPos.x / CHUNK_SIZE),
+        0,
+        (int)floor(worldPos.z / CHUNK_SIZE)
+    );
+}
+
+void World::update(const glm::vec3& cameraPos) {
+    glm::ivec3 cameraChunk = worldToChunkPos(cameraPos);
+
+    // First call: synchronously load a small area so the first frame isn't empty
+    if (lastCameraChunk.x == INT_MAX) {
+        lastCameraChunk = cameraChunk;
+
+        constexpr int INITIAL_RADIUS = 4;
+        for (int x = -INITIAL_RADIUS; x <= INITIAL_RADIUS; x++) {
+            for (int z = -INITIAL_RADIUS; z <= INITIAL_RADIUS; z++) {
+                glm::ivec3 pos(cameraChunk.x + x, 0, cameraChunk.z + z);
+                Chunk* chunk = new Chunk(pos);
+                chunk->fillTerrain(noise);
+                chunks[pos] = ChunkEntry{ chunk, ChunkState::TerrainReady };
+            }
+        }
+        for (auto& [pos, entry] : chunks) {
+            entry.chunk->buildMesh(this);
+            entry.state = ChunkState::MeshReady;
+        }
+
+        rebuildLoadQueue(cameraChunk);
+        return;
+    }
+
+    if (cameraChunk != lastCameraChunk) {
+        lastCameraChunk = cameraChunk;
+        rebuildLoadQueue(cameraChunk);
+    }
+
+    processLoadQueue();
+    processMeshRebuilds();
+    unloadDistantChunks(cameraChunk);
+}
+
+void World::rebuildLoadQueue(const glm::ivec3& cameraChunk) {
+    loadQueue.clear();
+
+    for (int x = -LOAD_RADIUS; x <= LOAD_RADIUS; x++) {
+        for (int z = -LOAD_RADIUS; z <= LOAD_RADIUS; z++) {
+            if (x * x + z * z > LOAD_RADIUS * LOAD_RADIUS)
+                continue;
+
+            glm::ivec3 pos(cameraChunk.x + x, 0, cameraChunk.z + z);
+            if (chunks.find(pos) == chunks.end())
+                loadQueue.push_back(pos);
         }
     }
 
-    // Fill terrain using noise, then build meshes
-    for (auto& [pos, chunk] : chunks)
-        chunk->fillTerrain(noise);
+    std::sort(loadQueue.begin(), loadQueue.end(),
+        [&cameraChunk](const glm::ivec3& a, const glm::ivec3& b) {
+            int da = (a.x - cameraChunk.x) * (a.x - cameraChunk.x)
+                   + (a.z - cameraChunk.z) * (a.z - cameraChunk.z);
+            int db = (b.x - cameraChunk.x) * (b.x - cameraChunk.x)
+                   + (b.z - cameraChunk.z) * (b.z - cameraChunk.z);
+            return da < db;
+        }
+    );
+}
 
-    for (auto& [pos, chunk] : chunks)
-        chunk->buildMesh(this);
+void World::processLoadQueue() {
+    int loaded = 0;
+    int idx = 0;
+
+    while (idx < (int)loadQueue.size() && loaded < LOAD_PER_FRAME) {
+        glm::ivec3 pos = loadQueue[idx++];
+
+        if (chunks.find(pos) != chunks.end())
+            continue;
+
+        Chunk* chunk = new Chunk(pos);
+        chunk->fillTerrain(noise);
+        chunks[pos] = ChunkEntry{ chunk, ChunkState::TerrainReady };
+
+        ensureMesh(pos);
+
+        // Also try to build meshes for neighbors that were waiting on this chunk
+        for (const auto& offset : NEIGHBOR_OFFSETS) {
+            glm::ivec3 neighborPos = pos + offset;
+            auto nit = chunks.find(neighborPos);
+            if (nit != chunks.end() && nit->second.state == ChunkState::TerrainReady)
+                ensureMesh(neighborPos);
+        }
+
+        loaded++;
+    }
+
+    if (idx > 0)
+        loadQueue.erase(loadQueue.begin(), loadQueue.begin() + idx);
+}
+
+void World::ensureMesh(const glm::ivec3& pos) {
+    auto it = chunks.find(pos);
+    if (it == chunks.end()) return;
+
+    ChunkEntry& entry = it->second;
+    if (entry.state == ChunkState::MeshReady) return;
+
+    // Check that all 4 horizontal neighbors have terrain data
+    for (const auto& offset : NEIGHBOR_OFFSETS) {
+        if (chunks.find(pos + offset) == chunks.end())
+            return;  // neighbor missing, defer mesh build
+    }
+
+    entry.chunk->buildMesh(this);
+    entry.state = ChunkState::MeshReady;
+
+    // Queue neighbor mesh rebuilds so their boundary faces update
+    for (const auto& offset : NEIGHBOR_OFFSETS) {
+        glm::ivec3 neighborPos = pos + offset;
+        auto nit = chunks.find(neighborPos);
+        if (nit != chunks.end() && nit->second.state == ChunkState::MeshReady)
+            meshRebuildQueue.push_back(neighborPos);
+    }
+}
+
+void World::processMeshRebuilds() {
+    int rebuilt = 0;
+
+    while (!meshRebuildQueue.empty() && rebuilt < REBUILD_PER_FRAME) {
+        glm::ivec3 pos = meshRebuildQueue.back();
+        meshRebuildQueue.pop_back();
+
+        auto it = chunks.find(pos);
+        if (it == chunks.end()) continue;
+        if (it->second.state != ChunkState::MeshReady) continue;
+
+        it->second.chunk->buildMesh(this);
+        rebuilt++;
+    }
+}
+
+void World::unloadDistantChunks(const glm::ivec3& cameraChunk) {
+    for (auto it = chunks.begin(); it != chunks.end(); ) {
+        int dx = it->first.x - cameraChunk.x;
+        int dz = it->first.z - cameraChunk.z;
+
+        if (dx * dx + dz * dz > UNLOAD_RADIUS * UNLOAD_RADIUS) {
+            delete it->second.chunk;
+            it = chunks.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 void World::render(Shader& shader, const glm::mat4& view, const glm::mat4& projection) {
-    for (auto& [pos, chunk] : chunks) {
+    for (auto& [pos, entry] : chunks) {
+        if (entry.state != ChunkState::MeshReady) continue;
+
         glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(
             pos.x * CHUNK_SIZE,
             pos.y * CHUNK_SIZE,
@@ -44,14 +187,14 @@ void World::render(Shader& shader, const glm::mat4& view, const glm::mat4& proje
         shader.setMat4("view",       view);
         shader.setMat4("projection", projection);
 
-        chunk->render();
+        entry.chunk->render();
     }
 }
 
 Chunk* World::getChunk(glm::ivec3 chunkPos) {
     auto it = chunks.find(chunkPos);
     if (it != chunks.end())
-        return it->second;
+        return it->second.chunk;
     return nullptr;
 }
 

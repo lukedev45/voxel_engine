@@ -31,9 +31,7 @@ int main() {
     glfwSetInputMode(window.handle, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glfwSetCursorPosCallback(window.handle, mouseCallback);
 
-    // Generate a 5x5 grid of chunks (radius 2)
     World world;
-    world.generate(2);
 
     Shader shader("assets/shaders/cube.vert", "assets/shaders/cube.frag");
 
@@ -65,6 +63,8 @@ int main() {
             window.isKeyPressed(GLFW_KEY_D),
             deltaTime
         );
+
+        world.update(camera.position);
 
         glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
