@@ -6,6 +6,12 @@
 #include "Shader.h"
 #include "FastNoiseLite.h"
 
+struct RaycastHit {
+    bool hit = false;
+    glm::ivec3 blockPos;   // world-space block coordinates of the hit block
+    glm::ivec3 normal;     // face normal (used for placement: place at blockPos + normal)
+};
+
 struct IVec3Hash {
     size_t operator()(const glm::ivec3& v) const {
         size_t seed = 0;
@@ -44,6 +50,9 @@ public:
 
     Chunk* getChunk(glm::ivec3 chunkPos);
     uint8_t getVoxel(int worldX, int worldY, int worldZ);
+    void setVoxel(int worldX, int worldY, int worldZ, uint8_t type);
+
+    RaycastHit raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance = 8.0f);
 
 private:
     std::unordered_map<glm::ivec3, ChunkEntry, IVec3Hash> chunks;
