@@ -59,6 +59,57 @@ int main() {
     glCullFace(GL_BACK);
     glFrontFace(GL_CCW);
 
+    // Sky setup — fullscreen quad rendered at the far plane
+    Shader skyShader("assets/shaders/sky.vert", "assets/shaders/sky.frag");
+    float skyQuad[] = {
+        -1.0f, -1.0f,
+         1.0f, -1.0f,
+         1.0f,  1.0f,
+         1.0f,  1.0f,
+        -1.0f,  1.0f,
+        -1.0f, -1.0f,
+    };
+    unsigned int skyVAO, skyVBO;
+    glGenVertexArrays(1, &skyVAO);
+    glGenBuffers(1, &skyVBO);
+    glBindVertexArray(skyVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, skyVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(skyQuad), skyQuad, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glBindVertexArray(0);
+
+    // Block highlight — wireframe cube drawn on the targeted block
+    Shader highlightShader("assets/shaders/highlight.vert", "assets/shaders/highlight.frag");
+    // 12 edges of a unit cube, slightly expanded to avoid z-fighting
+    float e = 0.002f; // expansion offset
+    float highlightVerts[] = {
+        // Bottom face edges
+        -e,-e,-e,  1+e,-e,-e,
+        1+e,-e,-e, 1+e,-e,1+e,
+        1+e,-e,1+e, -e,-e,1+e,
+        -e,-e,1+e, -e,-e,-e,
+        // Top face edges
+        -e,1+e,-e,  1+e,1+e,-e,
+        1+e,1+e,-e, 1+e,1+e,1+e,
+        1+e,1+e,1+e, -e,1+e,1+e,
+        -e,1+e,1+e, -e,1+e,-e,
+        // Vertical edges
+        -e,-e,-e, -e,1+e,-e,
+        1+e,-e,-e, 1+e,1+e,-e,
+        1+e,-e,1+e, 1+e,1+e,1+e,
+        -e,-e,1+e, -e,1+e,1+e,
+    };
+    unsigned int highlightVAO, highlightVBO;
+    glGenVertexArrays(1, &highlightVAO);
+    glGenBuffers(1, &highlightVBO);
+    glBindVertexArray(highlightVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, highlightVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(highlightVerts), highlightVerts, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glBindVertexArray(0);
+
     // HUD shader (crosshair + hotbar)
     Shader hudShader("assets/shaders/crosshair.vert", "assets/shaders/crosshair.frag");
 
@@ -144,7 +195,6 @@ int main() {
 
         world.update(camera.position);
 
-        glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glm::mat4 view = camera.getViewMatrix();
@@ -155,8 +205,40 @@ int main() {
             500.0f
         );
 
+        // Draw sky first (depth write off so world renders on top)
+        glDepthMask(GL_FALSE);
+        skyShader.use();
+        glm::mat4 invViewProj = glm::inverse(projection * view);
+        skyShader.setMat4("invViewProj", invViewProj);
+        skyShader.setVec3("cameraPos", camera.position);
+        glBindVertexArray(skyVAO);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glBindVertexArray(0);
+        glDepthMask(GL_TRUE);
+
+        // Draw world
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, atlasTexture);
         shader.use();
         world.render(shader, view, projection);
+
+        // Draw block highlight wireframe
+        RaycastHit highlightHit = world.raycast(camera.position, camera.getForward());
+        if (highlightHit.hit) {
+            glDisable(GL_CULL_FACE);
+            highlightShader.use();
+            glm::mat4 highlightModel = glm::translate(glm::mat4(1.0f),
+                glm::vec3(highlightHit.blockPos));
+            highlightShader.setMat4("model", highlightModel);
+            highlightShader.setMat4("view", view);
+            highlightShader.setMat4("projection", projection);
+            highlightShader.setVec3("color", glm::vec3(0.1f, 0.1f, 0.1f));
+            glLineWidth(2.0f);
+            glBindVertexArray(highlightVAO);
+            glDrawArrays(GL_LINES, 0, 24);
+            glBindVertexArray(0);
+            glEnable(GL_CULL_FACE);
+        }
 
         // Draw HUD on top of everything
         glDisable(GL_DEPTH_TEST);
