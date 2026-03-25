@@ -31,5 +31,5 @@ private:
     int vertexCount;
 
     int indexOf(int x, int y, int z) const;
-    void addFace(std::vector<float>& vertices, float x, float y, float z, int face, int tileIndex);
+    void addFace(std::vector<float>& vertices, float x, float y, float z, int face, int tileIndex, const int ao[4]);
 };

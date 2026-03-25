@@ -1,6 +1,7 @@
 #version 330 core
 in vec2 TexCoord;
 in float face;
+in float ao;
 out vec4 FragColor;
 
 uniform sampler2D texAtlas;
@@ -17,5 +18,9 @@ void main() {
     else if (faceIndex == 1) brightness = 0.7;  // back
     else                     brightness = 0.75; // left/right
 
-    FragColor = vec4(texColour.rgb * brightness, 1.0);
+    // Ambient occlusion: ao is 0-3, map to brightness multiplier
+    // 3 = no occlusion (1.0), 0 = fully occluded (0.45)
+    float aoFactor = 0.45 + (ao / 3.0) * 0.55;
+
+    FragColor = vec4(texColour.rgb * brightness * aoFactor, 1.0);
 }
