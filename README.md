@@ -1,0 +1,1 @@
+A Minecraft-style voxel engine in C++20 and OpenGL: procedurally generated terrain streamed in chunks around the player, face-culled meshing with per-vertex ambient occlusion, and DDA raycasting for breaking and placing blocks.
